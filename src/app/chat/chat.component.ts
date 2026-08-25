@@ -10,10 +10,10 @@ interface Conversacion {
 }
 
 const PROMPTS_SUGERIDOS = [
-  'Explícame qué es Transfer Learning',
-  '¿Cómo funciona la propagación hacia atrás?',
-  'Dame ideas para mi proyecto de clasificación de imágenes',
-  '¿Qué diferencia hay entre CNN y RNN?',
+  'Sube una foto de un ave y te diré su especie',
+  '¿Qué precisión tiene el modelo entrenado?',
+  '¿Qué es el dataset Caltech Birds 2011?',
+  '¿Cómo funciona EfficientNetB0?',
 ];
 
 @Component({
@@ -26,6 +26,7 @@ const PROMPTS_SUGERIDOS = [
 export class ChatComponent implements AfterViewChecked {
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef<HTMLElement>;
   @ViewChild('inputArea') private inputArea!: ElementRef<HTMLTextAreaElement>;
+  @ViewChild('fileInput') private fileInput!: ElementRef<HTMLInputElement>;
 
   promptsSugeridos = PROMPTS_SUGERIDOS;
 
@@ -38,6 +39,9 @@ export class ChatComponent implements AfterViewChecked {
   entradaUsuario: string = '';
   escribiendo: boolean = false;
   sidebarAbierta: boolean = true;
+
+  imagenSeleccionada: File | null = null;
+  imagenPreviewUrl: string | null = null;
 
   constructor(private chatService: ChatService) {}
 
@@ -55,6 +59,7 @@ export class ChatComponent implements AfterViewChecked {
     this.conversacionActivaId = nueva.id;
     this.nextId++;
     this.entradaUsuario = '';
+    this.quitarImagen();
   }
 
   seleccionarConversacion(id: number): void {
@@ -66,22 +71,62 @@ export class ChatComponent implements AfterViewChecked {
     this.enviarMensaje();
   }
 
+  abrirSelectorArchivo(): void {
+    this.fileInput.nativeElement.click();
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const archivo = input.files?.[0];
+    if (!archivo) return;
+
+    this.imagenSeleccionada = archivo;
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.imagenPreviewUrl = reader.result as string;
+    };
+    reader.readAsDataURL(archivo);
+  }
+
+  quitarImagen(): void {
+    this.imagenSeleccionada = null;
+    this.imagenPreviewUrl = null;
+    if (this.fileInput) {
+      this.fileInput.nativeElement.value = '';
+    }
+  }
+
   enviarMensaje(): void {
     const texto = this.entradaUsuario.trim();
-    if (!texto || this.escribiendo) return;
+    if (!texto && !this.imagenSeleccionada) return;
+    if (this.escribiendo) return;
 
     const conv = this.conversacionActiva;
-    conv.mensajes.push({ role: 'user', text: texto, timestamp: new Date() });
+
+    conv.mensajes.push({
+      role: 'user',
+      text: texto || '(imagen enviada)',
+      timestamp: new Date(),
+      imageDataUrl: this.imagenPreviewUrl || undefined,
+    });
 
     if (conv.mensajes.length === 1) {
-      conv.titulo = texto.length > 32 ? texto.slice(0, 32) + '…' : texto;
+      const base = texto || 'Imagen enviada';
+      conv.titulo = base.length > 32 ? base.slice(0, 32) + '…' : base;
     }
 
-    this.entradaUsuario = '';
     this.escribiendo = true;
+    const archivoParaClasificar = this.imagenSeleccionada;
+
+    this.entradaUsuario = '';
+    this.quitarImagen();
     this.autoResize();
 
-    this.chatService.getBotResponse(texto).subscribe((respuesta) => {
+    const respuesta$ = archivoParaClasificar
+      ? this.chatService.classifyImage(archivoParaClasificar)
+      : this.chatService.getBotResponse(texto);
+
+    respuesta$.subscribe((respuesta) => {
       conv.mensajes.push({ role: 'bot', text: respuesta, timestamp: new Date() });
       this.escribiendo = false;
     });
@@ -107,10 +152,10 @@ export class ChatComponent implements AfterViewChecked {
     this.sidebarAbierta = !this.sidebarAbierta;
   }
 
-ngAfterViewChecked(): void {
-  try {
-    const el = this.scrollContainer.nativeElement;
-    el.scrollTop = el.scrollHeight;
-  } catch (e) {}
-}
+  ngAfterViewChecked(): void {
+    try {
+      const el = this.scrollContainer.nativeElement;
+      el.scrollTop = el.scrollHeight;
+    } catch (e) {}
+  }
 }

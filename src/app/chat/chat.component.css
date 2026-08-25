@@ -518,6 +518,53 @@
   color: #6B6885;
 }
 
+/* ================= Imagen adjunta ================= */
+.message-image {
+  width: 100%;
+  max-width: 240px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.image-preview-bar {
+  max-width: 720px;
+  margin: 0 auto 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(20, 18, 32, 0.85);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  border-radius: 12px;
+  width: fit-content;
+}
+
+.image-preview-bar img {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.remove-image-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #C4B5FD;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.remove-image-btn:hover {
+  background: rgba(124, 58, 237, 0.3);
+}
+
 /* ================= Scrollbar ================= */
 .conversation-list::-webkit-scrollbar,
 .conversation-area::-webkit-scrollbar {
