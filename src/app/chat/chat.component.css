@@ -739,3 +739,14 @@
     animation: none;
   }
 }
+
+.recording-active {
+  color: #FF4D6D;
+  background: rgba(255, 77, 109, 0.15);
+  animation: recording-pulse 1s infinite ease-in-out;
+}
+
+@keyframes recording-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 109, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(255, 77, 109, 0); }
+}

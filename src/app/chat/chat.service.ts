@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
-import { catchError, delay, map } from 'rxjs/operators';
+import { catchError, map } from 'rxjs/operators';
 
 export interface ChatMessage {
   role: 'user' | 'bot';
@@ -15,15 +15,6 @@ interface PrediccionEspecie {
   confianza: number;
 }
 
-// Respuestas fijas mientras no hay conexión real al modelo.
-const RESPUESTAS_FIJAS = [
-  'Entendido, estoy procesando tu solicitud.',
-  'Gracias por tu mensaje, esto es una respuesta de prueba.',
-  'Interesante, déjame revisarlo con más detalle.',
-  'Por ahora solo puedo responder con mensajes predeterminados.',
-  'Recibido. Esta es una respuesta simulada mientras se conecta el modelo.',
-];
-
 // Backend Flask que sirve el modelo entrenado (EfficientNetB0 + Transfer Learning
 // sobre Caltech Birds 2011). Ver app.py en la raíz del proyecto.
 const IMAGE_API_URL = 'http://localhost:8000';
@@ -35,19 +26,58 @@ export class ChatService {
   constructor(private http: HttpClient) {}
 
   /**
-   * HOY: devuelve una respuesta fija/aleatoria.
-   * DESPUÉS: reemplazar por la llamada real al backend/modelo:
-   *   return this.http.post<{ respuesta: string }>('URL_DEL_BACKEND', { mensaje })
-   *     .pipe(map(res => res.respuesta));
+   * Conexión real con el backend que llama a OpenAI con streaming.
+   * onToken se ejecuta cada vez que llega un pedazo nuevo de texto.
    */
-  getBotResponse(mensaje: string): Observable<string> {
-    const respuesta = RESPUESTAS_FIJAS[Math.floor(Math.random() * RESPUESTAS_FIJAS.length)];
-    return of(respuesta).pipe(delay(600 + Math.random() * 500));
+  async streamBotResponse(
+    mensaje: string,
+    historial: { role: string; content: string }[],
+    onToken: (token: string) => void
+  ): Promise<void> {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mensaje, historial }),
+    });
+
+    if (!response.body) return;
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lineas = buffer.split('\n\n');
+      buffer = lineas.pop() || '';
+
+      for (const linea of lineas) {
+        if (!linea.startsWith('data: ')) continue;
+        const data = linea.replace('data: ', '').trim();
+        if (data === '[DONE]') return;
+
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.token) onToken(parsed.token);
+        } catch (e) {}
+      }
+    }
   }
+
 
   /** Solicita al backend el MP3 generado por OpenAI sin exponer la API key. */
   getVoiceResponse(texto: string): Observable<Blob> {
     return this.http.post('/api/voice', { text: texto }, { responseType: 'blob' });
+  }
+
+  /** Envía el audio grabado al backend para transcribirlo con Whisper. */
+  transcribeAudio(audioBlob: Blob): Observable<{ text: string }> {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'audio.webm');
+    return this.http.post<{ text: string }>('/api/transcribe', formData);
   }
 
   /**

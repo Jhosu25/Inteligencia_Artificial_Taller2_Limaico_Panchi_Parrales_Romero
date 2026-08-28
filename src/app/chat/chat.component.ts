@@ -46,6 +46,11 @@ export class ChatComponent implements AfterViewChecked, OnDestroy {
 
   clasificacionImagenActiva: boolean = false;
 
+  grabandoAudio: boolean = false;
+  transcribiendoAudio: boolean = false;
+  private mediaRecorder: MediaRecorder | null = null;
+  private audioChunks: Blob[] = [];
+
   private audioActual: HTMLAudioElement | null = null;
   private audioUrlActual: string | null = null;
   private solicitudVoz: Subscription | null = null;
@@ -106,7 +111,59 @@ export class ChatComponent implements AfterViewChecked, OnDestroy {
     }
   }
 
-  enviarMensaje(): void {
+  async alternarGrabacion(): Promise<void> {
+    if (this.grabandoAudio) {
+      this.mediaRecorder?.stop();
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.audioChunks = [];
+      this.mediaRecorder = new MediaRecorder(stream);
+
+      this.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) this.audioChunks.push(event.data);
+      };
+
+      this.mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(track => track.stop());
+        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+        this.enviarAudioParaTranscribir(audioBlob);
+      };
+
+      this.mediaRecorder.start();
+            this.grabandoAudio = true;
+
+      // Corta automáticamente la grabación a los 15 segundos
+      setTimeout(() => {
+        if (this.mediaRecorder?.state === 'recording') {
+          this.mediaRecorder.stop();
+        }
+      }, 15000);
+    } catch (e) {
+      console.error('No se pudo acceder al micrófono:', e);
+    }
+  }
+
+  private enviarAudioParaTranscribir(audioBlob: Blob): void {
+    this.grabandoAudio = false;
+    this.transcribiendoAudio = true;
+
+    this.chatService.transcribeAudio(audioBlob).subscribe({
+      next: (resultado) => {
+        this.transcribiendoAudio = false;
+        this.entradaUsuario = resultado.text;
+        this.enviarMensaje();
+      },
+      error: () => {
+        this.transcribiendoAudio = false;
+        console.error('No se pudo transcribir el audio.');
+      },
+    });
+  }
+
+  async enviarMensaje(): Promise<void> {
     const texto = this.entradaUsuario.trim();
     if (!texto && !this.imagenSeleccionada) return;
     if (this.escribiendo) return;
@@ -133,33 +190,48 @@ export class ChatComponent implements AfterViewChecked, OnDestroy {
     this.quitarImagen();
     this.autoResize();
 
-    const respuesta$ = archivoParaClasificar
-      ? this.chatService.classifyImage(archivoParaClasificar)
-      : this.chatService.getBotResponse(texto);
+    if (archivoParaClasificar) {
+      this.chatService.classifyImage(archivoParaClasificar).subscribe({
+        next: (respuesta) => {
+          conv.mensajes.push({ role: 'bot', text: respuesta, timestamp: new Date() });
+          this.escribiendo = false;
 
-    // Acumula fragmentos y genera audio una sola vez, al finalizar la respuesta.
-    let respuestaCompleta = '';
-    respuesta$.subscribe({
-      next: (fragmento) => {
-        respuestaCompleta += fragmento;
-      },
-      error: () => {
-        conv.mensajes.push({
-          role: 'bot',
-          text: 'No pude procesar la solicitud. Inténtalo nuevamente.',
-          timestamp: new Date(),
-        });
-        this.escribiendo = false;
-      },
-      complete: () => {
-        conv.mensajes.push({ role: 'bot', text: respuestaCompleta, timestamp: new Date() });
-        this.escribiendo = false;
+          if (this.respuestaPorVozActiva) {
+            this.generarYReproducirVoz(respuesta);
+          }
+        },
+        error: () => {
+          conv.mensajes.push({
+            role: 'bot',
+            text: 'No pude procesar la imagen. Inténtalo nuevamente.',
+            timestamp: new Date(),
+          });
+          this.escribiendo = false;
+        },
+      });
+      return;
+    }
 
-        if (this.respuestaPorVozActiva && respuestaCompleta) {
-          this.generarYReproducirVoz(respuestaCompleta);
-        }
-      },
-    });
+    const historial = conv.mensajes
+      .slice(0, -1)
+      .map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
+
+    const mensajeBot: ChatMessage = { role: 'bot', text: '', timestamp: new Date() };
+    conv.mensajes.push(mensajeBot);
+
+    try {
+      await this.chatService.streamBotResponse(texto, historial, (token) => {
+        mensajeBot.text += token;
+      });
+    } catch (e) {
+      mensajeBot.text = 'No pude conectarme con el asistente. Inténtalo nuevamente.';
+    }
+
+    this.escribiendo = false;
+
+    if (this.respuestaPorVozActiva && mensajeBot.text) {
+      this.generarYReproducirVoz(mensajeBot.text);
+    }
   }
 
   alCambiarRespuestaPorVoz(activada: boolean): void {
