@@ -43,3 +43,13 @@ testem.log
 # System files
 .DS_Store
 Thumbs.db
+
+# Backend Python (clasificación de imágenes)
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Pesos del modelo entrenado (archivo binario pesado, no se versiona)
+pesos/*.h5
+pesos/*.tflite

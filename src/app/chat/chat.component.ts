@@ -44,6 +44,8 @@ export class ChatComponent implements AfterViewChecked, OnDestroy {
   generandoVoz: boolean = false;
   errorVoz: string | null = null;
 
+  clasificacionImagenActiva: boolean = false;
+
   private audioActual: HTMLAudioElement | null = null;
   private audioUrlActual: string | null = null;
   private solicitudVoz: Subscription | null = null;
@@ -108,12 +110,13 @@ export class ChatComponent implements AfterViewChecked, OnDestroy {
     const texto = this.entradaUsuario.trim();
     if (!texto && !this.imagenSeleccionada) return;
     if (this.escribiendo) return;
+    if (this.imagenSeleccionada && !this.clasificacionImagenActiva) return;
 
     const conv = this.conversacionActiva;
 
     conv.mensajes.push({
       role: 'user',
-      text: texto || '(imagen enviada)',
+      text: texto,
       timestamp: new Date(),
       imageDataUrl: this.imagenPreviewUrl || undefined,
     });
@@ -165,6 +168,14 @@ export class ChatComponent implements AfterViewChecked, OnDestroy {
 
     if (!activada) {
       this.detenerAudio();
+    }
+  }
+
+  alCambiarClasificacionImagen(activada: boolean): void {
+    this.clasificacionImagenActiva = activada;
+
+    if (!activada) {
+      this.quitarImagen();
     }
   }
 

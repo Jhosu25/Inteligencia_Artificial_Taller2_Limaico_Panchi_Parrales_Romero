@@ -211,6 +211,16 @@
   color: #C4B5FD;
 }
 
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.icon-btn:disabled:hover {
+  background: transparent;
+  color: #8B88A8;
+}
+
 .app-name-wrap {
   display: flex;
   align-items: center;
@@ -251,7 +261,7 @@
 }
 
 .voice-control {
-  margin-left: auto;
+  margin-left: 18px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -303,6 +313,43 @@
 }
 
 .voice-control-active .voice-switch::after {
+  transform: translateX(15px);
+  background: #00F0FF;
+}
+
+.vision-control {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #8B88A8;
+  font-size: 11.5px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.vision-control input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.vision-control input:focus-visible + .voice-switch {
+  outline: 2px solid #00F0FF;
+  outline-offset: 2px;
+}
+
+.vision-control-active {
+  color: #C4B5FD;
+}
+
+.vision-control-active .voice-switch {
+  background: rgba(124, 58, 237, 0.35);
+  border-color: #00F0FF;
+  box-shadow: 0 0 9px rgba(0, 240, 255, 0.25);
+}
+
+.vision-control-active .voice-switch::after {
   transform: translateX(15px);
   background: #00F0FF;
 }
@@ -673,6 +720,7 @@
     padding-inline: 14px;
   }
   .voice-control > span:last-child,
+  .vision-control > span:last-child,
   .status-pill {
     display: none;
   }
