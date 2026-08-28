@@ -10,15 +10,6 @@ export interface ChatMessage {
   imageDataUrl?: string;
 }
 
-// Respuestas fijas mientras no hay conexión real al modelo.
-const RESPUESTAS_FIJAS = [
-  'Entendido, estoy procesando tu solicitud.',
-  'Gracias por tu mensaje, esto es una respuesta de prueba.',
-  'Interesante, déjame revisarlo con más detalle.',
-  'Por ahora solo puedo responder con mensajes predeterminados.',
-  'Recibido. Esta es una respuesta simulada mientras se conecta el modelo.',
-];
-
 // Especies de ejemplo del dataset Caltech Birds 2011 (CUB-200-2011)
 const ESPECIES_EJEMPLO = [
   'Cardenal Rojo (Northern Cardinal)',
@@ -36,32 +27,65 @@ export class ChatService {
   constructor(private http: HttpClient) {}
 
   /**
-   * HOY: devuelve una respuesta fija/aleatoria.
-   * DESPUÉS: reemplazar por la llamada real al backend/modelo:
-   *   return this.http.post<{ respuesta: string }>('URL_DEL_BACKEND', { mensaje })
-   *     .pipe(map(res => res.respuesta));
+   * Conexión real con el backend que llama a OpenAI con streaming.
+   * onToken se ejecuta cada vez que llega un pedazo nuevo de texto.
    */
-  getBotResponse(mensaje: string): Observable<string> {
-    const respuesta = RESPUESTAS_FIJAS[Math.floor(Math.random() * RESPUESTAS_FIJAS.length)];
-    return of(respuesta).pipe(delay(600 + Math.random() * 500));
+  async streamBotResponse(
+    mensaje: string,
+    historial: { role: string; content: string }[],
+    onToken: (token: string) => void
+  ): Promise<void> {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mensaje, historial }),
+    });
+
+    if (!response.body) return;
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lineas = buffer.split('\n\n');
+      buffer = lineas.pop() || '';
+
+      for (const linea of lineas) {
+        if (!linea.startsWith('data: ')) continue;
+        const data = linea.replace('data: ', '').trim();
+        if (data === '[DONE]') return;
+
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.token) onToken(parsed.token);
+        } catch (e) {}
+      }
+    }
   }
+
 
   /** Solicita al backend el MP3 generado por OpenAI sin exponer la API key. */
   getVoiceResponse(texto: string): Observable<Blob> {
     return this.http.post('/api/voice', { text: texto }, { responseType: 'blob' });
   }
 
+  /** Envía el audio grabado al backend para transcribirlo con Whisper. */
+  transcribeAudio(audioBlob: Blob): Observable<{ text: string }> {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'audio.webm');
+    return this.http.post<{ text: string }>('/api/transcribe', formData);
+  }
+
   /**
    * Simula la clasificación de una imagen de ave con el modelo entrenado
    * (EfficientNetB0 + Transfer Learning, dataset Caltech Birds 2011).
    * DESPUÉS: reemplazar por una llamada real que suba la imagen al backend
-   * que sirve model.h5, por ejemplo:
-   *
-   *   const formData = new FormData();
-   *   formData.append('imagen', archivo);
-   *   return this.http.post<{ especie: string, confianza: number }>(
-   *     'URL_DEL_BACKEND/predict', formData
-   *   ).pipe(map(res => `Especie detectada: ${res.especie} (${res.confianza}% de confianza)`));
+   * que sirve model.h5.
    */
   classifyImage(archivo: File): Observable<string> {
     const especie = ESPECIES_EJEMPLO[Math.floor(Math.random() * ESPECIES_EJEMPLO.length)];
