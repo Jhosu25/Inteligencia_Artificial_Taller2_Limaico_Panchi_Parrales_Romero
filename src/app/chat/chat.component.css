@@ -239,7 +239,6 @@
 }
 
 .status-pill {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -249,6 +248,63 @@
   border-radius: 999px;
   border: 1px solid rgba(0, 240, 255, 0.25);
   background: rgba(0, 240, 255, 0.05);
+}
+
+.voice-control {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #8B88A8;
+  font-size: 11.5px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.voice-control input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.voice-control input:focus-visible + .voice-switch {
+  outline: 2px solid #00F0FF;
+  outline-offset: 2px;
+}
+
+.voice-switch {
+  width: 34px;
+  height: 19px;
+  padding: 2px;
+  border-radius: 999px;
+  background: #2A2838;
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  transition: all 0.2s ease;
+}
+
+.voice-switch::after {
+  content: '';
+  display: block;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #8B88A8;
+  transition: all 0.2s ease;
+}
+
+.voice-control-active {
+  color: #C4B5FD;
+}
+
+.voice-control-active .voice-switch {
+  background: rgba(124, 58, 237, 0.35);
+  border-color: #00F0FF;
+  box-shadow: 0 0 9px rgba(0, 240, 255, 0.25);
+}
+
+.voice-control-active .voice-switch::after {
+  transform: translateX(15px);
+  background: #00F0FF;
 }
 
 .status-dot {
@@ -441,6 +497,31 @@
   z-index: 2;
 }
 
+.voice-status {
+  max-width: 720px;
+  margin: 0 auto 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  min-height: 18px;
+  color: #A7A3C2;
+  font-size: 11.5px;
+}
+
+.voice-loading-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #00F0FF;
+  box-shadow: 0 0 7px #00F0FF;
+  animation: pulse-voice 1s ease-in-out infinite;
+}
+
+@keyframes pulse-voice {
+  50% { opacity: 0.35; transform: scale(0.8); }
+}
+
 .input-wrapper {
   max-width: 720px;
   margin: 0 auto;
@@ -587,6 +668,14 @@
   .sidebar-closed {
     margin-left: -260px;
   }
+  .topbar {
+    gap: 8px;
+    padding-inline: 14px;
+  }
+  .voice-control > span:last-child,
+  .status-pill {
+    display: none;
+  }
 }
 
 /* Reduced motion */
@@ -596,6 +685,9 @@
   .glow-blob,
   .hero-icon,
   .bot-avatar.pulse {
+    animation: none;
+  }
+  .voice-loading-dot {
     animation: none;
   }
 }

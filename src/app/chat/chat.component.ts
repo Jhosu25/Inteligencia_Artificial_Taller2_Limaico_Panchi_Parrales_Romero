@@ -1,6 +1,7 @@
-import { Component, ElementRef, ViewChild, AfterViewChecked } from '@angular/core';
+import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
 import { ChatService, ChatMessage } from './chat.service';
 
 interface Conversacion {
@@ -23,7 +24,7 @@ const PROMPTS_SUGERIDOS = [
   templateUrl: './chat.component.html',
   styleUrls: ['./chat.component.css'],
 })
-export class ChatComponent implements AfterViewChecked {
+export class ChatComponent implements AfterViewChecked, OnDestroy {
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef<HTMLElement>;
   @ViewChild('inputArea') private inputArea!: ElementRef<HTMLTextAreaElement>;
   @ViewChild('fileInput') private fileInput!: ElementRef<HTMLInputElement>;
@@ -39,6 +40,13 @@ export class ChatComponent implements AfterViewChecked {
   entradaUsuario: string = '';
   escribiendo: boolean = false;
   sidebarAbierta: boolean = true;
+  respuestaPorVozActiva: boolean = false;
+  generandoVoz: boolean = false;
+  errorVoz: string | null = null;
+
+  private audioActual: HTMLAudioElement | null = null;
+  private audioUrlActual: string | null = null;
+  private solicitudVoz: Subscription | null = null;
 
   imagenSeleccionada: File | null = null;
   imagenPreviewUrl: string | null = null;
@@ -126,10 +134,91 @@ export class ChatComponent implements AfterViewChecked {
       ? this.chatService.classifyImage(archivoParaClasificar)
       : this.chatService.getBotResponse(texto);
 
-    respuesta$.subscribe((respuesta) => {
-      conv.mensajes.push({ role: 'bot', text: respuesta, timestamp: new Date() });
-      this.escribiendo = false;
+    // Acumula fragmentos y genera audio una sola vez, al finalizar la respuesta.
+    let respuestaCompleta = '';
+    respuesta$.subscribe({
+      next: (fragmento) => {
+        respuestaCompleta += fragmento;
+      },
+      error: () => {
+        conv.mensajes.push({
+          role: 'bot',
+          text: 'No pude procesar la solicitud. Inténtalo nuevamente.',
+          timestamp: new Date(),
+        });
+        this.escribiendo = false;
+      },
+      complete: () => {
+        conv.mensajes.push({ role: 'bot', text: respuestaCompleta, timestamp: new Date() });
+        this.escribiendo = false;
+
+        if (this.respuestaPorVozActiva && respuestaCompleta) {
+          this.generarYReproducirVoz(respuestaCompleta);
+        }
+      },
     });
+  }
+
+  alCambiarRespuestaPorVoz(activada: boolean): void {
+    this.respuestaPorVozActiva = activada;
+    this.errorVoz = null;
+
+    if (!activada) {
+      this.detenerAudio();
+    }
+  }
+
+  private generarYReproducirVoz(texto: string): void {
+    this.detenerAudio();
+    this.generandoVoz = true;
+    this.errorVoz = null;
+
+    this.solicitudVoz = this.chatService.getVoiceResponse(texto).subscribe({
+      next: (audioBlob) => {
+        if (!this.respuestaPorVozActiva) return;
+
+        this.audioUrlActual = URL.createObjectURL(audioBlob);
+        this.audioActual = new Audio(this.audioUrlActual);
+        this.audioActual.addEventListener('ended', () => this.liberarAudio(), { once: true });
+        this.audioActual.addEventListener('error', () => {
+          this.errorVoz = 'No se pudo reproducir la respuesta por voz.';
+          this.liberarAudio();
+        }, { once: true });
+        this.audioActual.play().catch(() => {
+          this.errorVoz = 'El navegador bloqueó la reproducción automática del audio.';
+          this.liberarAudio();
+        });
+      },
+      error: () => {
+        this.generandoVoz = false;
+        this.errorVoz = 'No se pudo generar la voz. La respuesta escrita sigue disponible.';
+      },
+      complete: () => {
+        this.generandoVoz = false;
+        this.solicitudVoz = null;
+      },
+    });
+  }
+
+  private detenerAudio(): void {
+    this.solicitudVoz?.unsubscribe();
+    this.solicitudVoz = null;
+    this.generandoVoz = false;
+
+    if (this.audioActual) {
+      this.audioActual.pause();
+      this.audioActual.currentTime = 0;
+    }
+
+    this.liberarAudio();
+  }
+
+  private liberarAudio(): void {
+    this.audioActual = null;
+    if (this.audioUrlActual) {
+      URL.revokeObjectURL(this.audioUrlActual);
+      this.audioUrlActual = null;
+    }
   }
 
   manejarEnter(event: KeyboardEvent): void {
@@ -157,5 +246,9 @@ export class ChatComponent implements AfterViewChecked {
       const el = this.scrollContainer.nativeElement;
       el.scrollTop = el.scrollHeight;
     } catch (e) {}
+  }
+
+  ngOnDestroy(): void {
+    this.detenerAudio();
   }
 }

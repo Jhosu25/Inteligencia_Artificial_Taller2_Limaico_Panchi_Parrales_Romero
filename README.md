@@ -5,12 +5,23 @@ Frontend de chat combinando lo mejor de Claude (mensajes limpios, sin burbujas p
 ## Cómo abrir y correr el proyecto
 
 1. Abre esta carpeta en VS Code.
-2. En la terminal integrada:
+2. Copia `.env.example` como `.env` y reemplaza el valor de ejemplo con tu clave de OpenAI:
+   ```env
+   OPENAI_API_KEY=tu_clave_real
+   PORT=3000
+   ```
+   `.env` está ignorado por Git; nunca publiques la clave.
+3. En la terminal integrada:
    ```bash
    npm install
    npm start
    ```
-3. Abre `http://localhost:4200` en el navegador.
+4. Abre `http://localhost:4200` en el navegador.
+
+`npm start` levanta Angular y el backend de voz. Angular envía el texto terminado a
+`POST /api/voice`; el backend usa `gpt-4o-mini-tts` con la voz `alloy` y devuelve un MP3.
+El control **Respuesta por voz** puede detener la reproducción en cualquier momento.
+La voz reproducida es generada por inteligencia artificial.
 
 ## Estructura relevante
 
@@ -18,6 +29,8 @@ Frontend de chat combinando lo mejor de Claude (mensajes limpios, sin burbujas p
 - `src/app/chat/chat.component.html` — plantilla visual
 - `src/app/chat/chat.component.css` — estilos (paleta violeta/índigo sobre fondo papel, tipografía Space Grotesk + Inter)
 - `src/app/chat/chat.service.ts` — **aquí se conecta el modelo real**
+- `server/index.js` — endpoint seguro de voz; la clave de OpenAI nunca llega a Angular
+- `proxy.conf.json` — redirige `/api` al backend durante el desarrollo
 
 ## Conectar con el modelo entrenado
 
