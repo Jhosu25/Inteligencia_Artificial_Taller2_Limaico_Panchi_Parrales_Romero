@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { delay } from 'rxjs/operators';
 
@@ -32,6 +33,7 @@ const ESPECIES_EJEMPLO = [
   providedIn: 'root',
 })
 export class ChatService {
+  constructor(private http: HttpClient) {}
 
   /**
    * HOY: devuelve una respuesta fija/aleatoria.
@@ -42,6 +44,11 @@ export class ChatService {
   getBotResponse(mensaje: string): Observable<string> {
     const respuesta = RESPUESTAS_FIJAS[Math.floor(Math.random() * RESPUESTAS_FIJAS.length)];
     return of(respuesta).pipe(delay(600 + Math.random() * 500));
+  }
+
+  /** Solicita al backend el MP3 generado por OpenAI sin exponer la API key. */
+  getVoiceResponse(texto: string): Observable<Blob> {
+    return this.http.post('/api/voice', { text: texto }, { responseType: 'blob' });
   }
 
   /**
