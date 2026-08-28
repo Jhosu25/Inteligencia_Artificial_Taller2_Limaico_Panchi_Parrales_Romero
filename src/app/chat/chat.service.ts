@@ -8,11 +8,19 @@ export interface ChatMessage {
   text: string;
   timestamp: Date;
   imageDataUrl?: string;
+  especieResultado?: { especie: string; confianza: number };
 }
 
 interface PrediccionEspecie {
   especie: string;
   confianza: number;
+}
+
+export interface ResultadoClasificacion {
+  especie: string;
+  confianza: number;
+  textoVoz: string;
+  error?: string;
 }
 
 // Backend Flask que sirve el modelo entrenado (EfficientNetB0 + Transfer Learning
@@ -67,7 +75,6 @@ export class ChatService {
     }
   }
 
-
   /** Solicita al backend el MP3 generado por OpenAI sin exponer la API key. */
   getVoiceResponse(texto: string): Observable<Blob> {
     return this.http.post('/api/voice', { text: texto }, { responseType: 'blob' });
@@ -83,20 +90,30 @@ export class ChatService {
   /**
    * Clasifica una imagen de ave con el modelo entrenado (EfficientNetB0 + Transfer
    * Learning, dataset Caltech Birds 2011) sirviéndose del backend Flask (app.py).
+   * Devuelve los datos separados (especie/confianza) para poder mostrarlos en una
+   * tarjeta visual, además de un texto plano listo para leer en voz alta.
    */
-  classifyImage(archivo: File): Observable<string> {
+  classifyImage(archivo: File): Observable<ResultadoClasificacion> {
     const formData = new FormData();
     formData.append('imagen', archivo);
 
     return this.http.post<PrediccionEspecie>(`${IMAGE_API_URL}/predict`, formData).pipe(
-      map(
-        (res) =>
-          `Especie detectada: ${res.especie.replace(/_/g, ' ')} — ${res.confianza}% de confianza.`
-      ),
+      map((res) => {
+        const especieLegible = res.especie.replace(/_/g, ' ');
+        return {
+          especie: especieLegible,
+          confianza: res.confianza,
+          textoVoz: `Especie detectada: ${especieLegible}, con ${res.confianza}% de confianza.`,
+        };
+      }),
       catchError(() =>
-        of(
-          'No pude clasificar la imagen. Verifica que el backend de clasificación (Flask, puerto 8000) esté corriendo.'
-        )
+        of({
+          especie: '',
+          confianza: 0,
+          textoVoz: '',
+          error:
+            'No pude clasificar la imagen. Verifica que el backend de clasificación (Flask, puerto 8000) esté corriendo.',
+        })
       )
     );
   }

@@ -58,6 +58,54 @@
   transform: translateY(-1px);
 }
 
+/* ================= Accesos rápidos por categoría ================= */
+.quick-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 12px 12px;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.15);
+  margin-bottom: 8px;
+}
+
+.quick-category-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #A7A3C2;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.quick-category-btn:hover {
+  background: rgba(240, 168, 104, 0.08);
+  color: #F0D4B0;
+}
+
+.quick-category-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(240, 168, 104, 0.1);
+  color: #E0A868;
+  transition: all 0.15s ease;
+}
+
+.quick-category-btn:hover .quick-category-icon {
+  background: rgba(240, 168, 104, 0.22);
+  color: #F0D4B0;
+}
+
 .conversation-list {
   flex: 1;
   overflow-y: auto;
@@ -405,7 +453,14 @@
   font-size: 26px;
   font-weight: 600;
   color: #F0EEFF;
+  margin: 0 0 10px 0;
+}
+
+.empty-subtitle {
+  font-size: 13.5px;
+  color: #8B88A8;
   margin: 0 0 24px 0;
+  line-height: 1.5;
 }
 
 .prompt-chips {
@@ -510,6 +565,65 @@
   border-radius: 16px;
   border-bottom-right-radius: 4px;
   max-width: 70%;
+}
+
+/* ================= Tarjeta de especie detectada ================= */
+.species-card {
+  max-width: 320px;
+  width: 100%;
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: linear-gradient(160deg, rgba(240, 168, 104, 0.1), rgba(20, 18, 32, 0.9));
+  border: 1px solid rgba(240, 168, 104, 0.35);
+  box-shadow: 0 0 18px rgba(240, 168, 104, 0.12);
+}
+
+.species-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #E0A868;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.species-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  color: #F5E6D3;
+  margin: 0 0 12px 0;
+}
+
+.species-confidence-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.species-confidence-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(240, 168, 104, 0.15);
+  overflow: hidden;
+}
+
+.species-confidence-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #C98A3D, #F0D4B0);
+  border-radius: 999px;
+  transition: width 0.6s ease;
+}
+
+.species-confidence-value {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #E0A868;
+  min-width: 36px;
+  text-align: right;
 }
 
 /* Typing indicator */
@@ -749,4 +863,43 @@
 @keyframes recording-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 109, 0.4); }
   50% { box-shadow: 0 0 0 8px rgba(255, 77, 109, 0); }
+}
+
+/* ================= Indicador de estado rotativo ================= */
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  color: #A7A3C2;
+  font-size: 13.5px;
+}
+
+.status-icon {
+  color: #E0A868;
+  flex-shrink: 0;
+  animation: status-spin 1.6s linear infinite;
+}
+
+@keyframes status-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.status-text {
+  animation: status-fade 0.35s ease;
+}
+
+@keyframes status-fade {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-icon {
+    animation: none;
+  }
+  .status-text {
+    animation: none;
+  }
 }

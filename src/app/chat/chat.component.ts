@@ -10,11 +10,47 @@ interface Conversacion {
   mensajes: ChatMessage[];
 }
 
+interface CategoriaRapida {
+  etiqueta: string;
+  icono: 'identificar' | 'cuidado' | 'refugio';
+  prompt: string;
+}
+
 const PROMPTS_SUGERIDOS = [
   'Sube una foto de un ave y te diré su especie',
   '¿Qué precisión tiene el modelo entrenado?',
   '¿Qué es el dataset Caltech Birds 2011?',
   '¿Cómo funciona EfficientNetB0?',
+];
+
+const CATEGORIAS_RAPIDAS: CategoriaRapida[] = [
+  {
+    etiqueta: 'Identificación',
+    icono: 'identificar',
+    prompt: '¿Cómo funciona la identificación de especies con el modelo entrenado?',
+  },
+  {
+    etiqueta: 'Cuidado como mascota',
+    icono: 'cuidado',
+    prompt: '¿Qué cuidados básicos necesita un ave como mascota en casa?',
+  },
+  {
+    etiqueta: 'Refugios',
+    icono: 'refugio',
+    prompt: '¿Cuándo debería contactar a un refugio o centro de rescate de aves?',
+  },
+];
+
+const FRASES_ESTADO_TEXTO = [
+  'Analizando tu mensaje...',
+  'Consultando la base de conocimiento de aves...',
+  'Generando una respuesta...',
+];
+
+const FRASES_ESTADO_IMAGEN = [
+  'Procesando la imagen...',
+  'Ejecutando el modelo de clasificación...',
+  'Calculando el porcentaje de confianza...',
 ];
 
 @Component({
@@ -30,6 +66,7 @@ export class ChatComponent implements AfterViewChecked, OnDestroy {
   @ViewChild('fileInput') private fileInput!: ElementRef<HTMLInputElement>;
 
   promptsSugeridos = PROMPTS_SUGERIDOS;
+  categoriasRapidas = CATEGORIAS_RAPIDAS;
 
   conversaciones: Conversacion[] = [
     { id: 1, titulo: 'Nueva conversación', mensajes: [] },
@@ -58,6 +95,12 @@ export class ChatComponent implements AfterViewChecked, OnDestroy {
   imagenSeleccionada: File | null = null;
   imagenPreviewUrl: string | null = null;
 
+  // Estado rotativo tipo "pensando..."
+  fraseEstadoActual: string = '';
+  private frasesEstadoActivas: string[] = FRASES_ESTADO_TEXTO;
+  private indiceFraseEstado: number = 0;
+  private intervaloFraseEstado: ReturnType<typeof setInterval> | null = null;
+
   constructor(private chatService: ChatService) {}
 
   get conversacionActiva(): Conversacion {
@@ -84,6 +127,12 @@ export class ChatComponent implements AfterViewChecked, OnDestroy {
   usarPrompt(prompt: string): void {
     this.entradaUsuario = prompt;
     this.enviarMensaje();
+  }
+
+  usarPromptSinEnviar(prompt: string): void {
+    this.entradaUsuario = prompt;
+    this.autoResize();
+    this.inputArea?.nativeElement.focus();
   }
 
   abrirSelectorArchivo(): void {
@@ -133,9 +182,8 @@ export class ChatComponent implements AfterViewChecked, OnDestroy {
       };
 
       this.mediaRecorder.start();
-            this.grabandoAudio = true;
+      this.grabandoAudio = true;
 
-      // Corta automáticamente la grabación a los 15 segundos
       setTimeout(() => {
         if (this.mediaRecorder?.state === 'recording') {
           this.mediaRecorder.stop();
@@ -161,6 +209,25 @@ export class ChatComponent implements AfterViewChecked, OnDestroy {
         console.error('No se pudo transcribir el audio.');
       },
     });
+  }
+
+  private iniciarFrasesEstado(frases: string[]): void {
+    this.frasesEstadoActivas = frases;
+    this.indiceFraseEstado = 0;
+    this.fraseEstadoActual = frases[0];
+
+    this.intervaloFraseEstado = setInterval(() => {
+      this.indiceFraseEstado = (this.indiceFraseEstado + 1) % this.frasesEstadoActivas.length;
+      this.fraseEstadoActual = this.frasesEstadoActivas[this.indiceFraseEstado];
+    }, 1800);
+  }
+
+  private detenerFrasesEstado(): void {
+    if (this.intervaloFraseEstado) {
+      clearInterval(this.intervaloFraseEstado);
+      this.intervaloFraseEstado = null;
+    }
+    this.fraseEstadoActual = '';
   }
 
   async enviarMensaje(): Promise<void> {
@@ -191,13 +258,25 @@ export class ChatComponent implements AfterViewChecked, OnDestroy {
     this.autoResize();
 
     if (archivoParaClasificar) {
-      this.chatService.classifyImage(archivoParaClasificar).subscribe({
-        next: (respuesta) => {
-          conv.mensajes.push({ role: 'bot', text: respuesta, timestamp: new Date() });
-          this.escribiendo = false;
+      this.iniciarFrasesEstado(FRASES_ESTADO_IMAGEN);
 
-          if (this.respuestaPorVozActiva) {
-            this.generarYReproducirVoz(respuesta);
+      this.chatService.classifyImage(archivoParaClasificar).subscribe({
+        next: (resultado) => {
+          if (resultado.error) {
+            conv.mensajes.push({ role: 'bot', text: resultado.error, timestamp: new Date() });
+          } else {
+            conv.mensajes.push({
+              role: 'bot',
+              text: '',
+              timestamp: new Date(),
+              especieResultado: { especie: resultado.especie, confianza: resultado.confianza },
+            });
+          }
+          this.escribiendo = false;
+          this.detenerFrasesEstado();
+
+          if (this.respuestaPorVozActiva && resultado.textoVoz) {
+            this.generarYReproducirVoz(resultado.textoVoz);
           }
         },
         error: () => {
@@ -207,27 +286,37 @@ export class ChatComponent implements AfterViewChecked, OnDestroy {
             timestamp: new Date(),
           });
           this.escribiendo = false;
+          this.detenerFrasesEstado();
         },
       });
       return;
     }
+
+    this.iniciarFrasesEstado(FRASES_ESTADO_TEXTO);
 
     const historial = conv.mensajes
       .slice(0, -1)
       .map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
 
     const mensajeBot: ChatMessage = { role: 'bot', text: '', timestamp: new Date() };
-    conv.mensajes.push(mensajeBot);
+    let primerTokenLlego = false;
 
     try {
       await this.chatService.streamBotResponse(texto, historial, (token) => {
+        if (!primerTokenLlego) {
+          conv.mensajes.push(mensajeBot);
+          this.detenerFrasesEstado();
+          primerTokenLlego = true;
+        }
         mensajeBot.text += token;
       });
     } catch (e) {
+      if (!primerTokenLlego) conv.mensajes.push(mensajeBot);
       mensajeBot.text = 'No pude conectarme con el asistente. Inténtalo nuevamente.';
     }
 
     this.escribiendo = false;
+    this.detenerFrasesEstado();
 
     if (this.respuestaPorVozActiva && mensajeBot.text) {
       this.generarYReproducirVoz(mensajeBot.text);
@@ -333,5 +422,6 @@ export class ChatComponent implements AfterViewChecked, OnDestroy {
 
   ngOnDestroy(): void {
     this.detenerAudio();
+    this.detenerFrasesEstado();
   }
 }
